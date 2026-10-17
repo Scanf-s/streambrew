@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) {
 
     const char *filename = argc > 1 ? argv[1] : "sample.mp4";
     GError *error = nullptr;
-    streambrew::gst::GCharPtr uri(gst_filename_to_uri(filename, &error));
+    streambrew::gst::CharPtr uri(gst_filename_to_uri(filename, &error));
     if (uri == nullptr) {
         g_printerr("Cannot convert %s to a URI: %s\n", filename, error->message);
         g_clear_error(&error);

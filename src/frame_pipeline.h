@@ -33,8 +33,8 @@ private:
 
     // The destructor body runs before these members release their references,
     // so the pipeline is already in the NULL state at that point.
-    gst::GstObjectPtr<GstElement> pipeline_;
-    gst::GstObjectPtr<GstElement> appsink_;
-    gst::GstObjectPtr<GstBus> bus_;
+    gst::ObjectPtr<GstElement> pipeline_;
+    gst::ObjectPtr<GstElement> appsink_;
+    gst::ObjectPtr<GstBus> bus_;
 };
-}
+} // namespace streambrew

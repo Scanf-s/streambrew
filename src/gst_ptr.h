@@ -6,30 +6,30 @@
 
 namespace streambrew::gst {
 
-struct GstObjectUnref {
+struct ObjectUnref {
     void operator()(gpointer object) const { gst_object_unref(object); }
 };
 template <typename T>
-using GstObjectPtr = std::unique_ptr<T, GstObjectUnref>;
+using ObjectPtr = std::unique_ptr<T, ObjectUnref>;
 
-struct GstMessageUnref {
+struct MessageUnref {
     void operator()(GstMessage *message) const { gst_message_unref(message); }
 };
-using GstMessagePtr = std::unique_ptr<GstMessage, GstMessageUnref>;
+using MessagePtr = std::unique_ptr<GstMessage, MessageUnref>;
 
-struct GstSampleUnref {
+struct SampleUnref {
     void operator()(GstSample *sample) const { gst_sample_unref(sample); }
 };
-using GstSamplePtr = std::unique_ptr<GstSample, GstSampleUnref>;
+using SamplePtr = std::unique_ptr<GstSample, SampleUnref>;
 
-struct GFree {
+struct Free {
     void operator()(gpointer memory) const { g_free(memory); }
 };
-using GCharPtr = std::unique_ptr<gchar, GFree>;
+using CharPtr = std::unique_ptr<gchar, Free>;
 
-struct GErrorClear {
+struct ErrorFree {
     void operator()(GError *error) const { g_error_free(error); }
 };
-using GErrorPtr = std::unique_ptr<GError, GErrorClear>;
+using ErrorPtr = std::unique_ptr<GError, ErrorFree>;
 
-}
+} // namespace streambrew::gst
