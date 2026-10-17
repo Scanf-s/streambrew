@@ -5,6 +5,8 @@
 
 #include "gst_ptr.h"
 
+using Clock = std::chrono::steady_clock;
+
 int main(int argc, char *argv[]) {
     // Initialize GStreamer.
     gst_init(&argc, &argv);
@@ -58,7 +60,6 @@ int main(int argc, char *argv[]) {
     GstObjectPtr<GstBus> bus(gst_element_get_bus(playbin.get()));
 
     // Setup clock for measuring FPS
-    using Clock = std::chrono::steady_clock;
     auto window_start = Clock::now();
     unsigned int frame_count = 0;
 
@@ -82,7 +83,7 @@ int main(int argc, char *argv[]) {
                 if (debug_info != nullptr) {
                     g_printerr("Debug details: %s\n", debug_info);
                 }
-                
+
                 g_clear_error(&error);
                 g_free(debug_info);
                 running = false;
