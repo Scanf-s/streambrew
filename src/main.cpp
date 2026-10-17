@@ -3,13 +3,15 @@
 #include <chrono>
 #include <gst/app/gstappsink.h>
 
+#include "gst_ptr.h"
+
 int main(int argc, char *argv[]) {
     // Initialize GStreamer.
     gst_init(&argc, &argv);
 
     const char *filename = argc > 1 ? argv[1] : "sample.mp4";
     GError *error = nullptr;
-    gchar *uri = gst_filename_to_uri(filename, &error);
+    GCharPtr uri(gst_filename_to_uri(filename, &error));
     if (uri == nullptr) {
         g_printerr("Cannot convert %s to a URI: %s\n", filename, error->message);
         g_clear_error(&error);
@@ -18,47 +20,42 @@ int main(int argc, char *argv[]) {
 
     // Build pipeline elements
     // Playbin element
-    GstElement *playbin = gst_element_factory_make("playbin", nullptr);
+    GstObjectPtr<GstElement> playbin(gst_element_factory_make("playbin", nullptr));
     if (playbin == nullptr) {
         g_printerr("Could not create the GStreamer playbin element.\n");
-        g_free(uri);
         return 1;
     }
-    g_object_set(playbin, "uri", uri, nullptr);
-    g_free(uri);
+    g_object_set(playbin.get(), "uri", uri.get(), nullptr);
 
     // Normalize decoded video to a 30 FPS timeline.
-    GstElement* sink_bin = gst_parse_bin_from_description(
+    GstObjectPtr<GstElement> sink_bin(gst_parse_bin_from_description(
         "videorate ! "
         "video/x-raw,framerate=30/1 ! "
         "appsink name=frames sync=true",
         TRUE, // Automatically create a ghost pad for the unconnected input.
         &error
-    );
+    ));
     if (error != nullptr || sink_bin == nullptr) {
         g_printerr("Cannot create video sink: %s\n", error ? error->message : "unknown error");
         g_clear_error(&error);
-        if (sink_bin != nullptr) {
-            gst_object_unref(sink_bin);
-        }
-        gst_object_unref(playbin);
         return 1;
     }
 
-    // playbin has responsibility to clean up the sink_bin
-    g_object_set(playbin, "video-sink", sink_bin, nullptr);
+    // playbin takes ownership of sink_bin's floating reference.
+    // So sink_bin must give up its ownership by calling .release()
+    GstElement *sink_bin_view = sink_bin.release();
+    g_object_set(playbin.get(), "video-sink", sink_bin_view, nullptr);
 
     // get appsink element from sink_bin
-    GstElement *appsink = gst_bin_get_by_name(GST_BIN(sink_bin), "frames");
+    GstObjectPtr<GstElement> appsink(gst_bin_get_by_name(GST_BIN(sink_bin_view), "frames"));
     if (appsink == nullptr) {
         g_printerr("Could not create the GStreamer appsink element\n");
-        gst_object_unref(playbin);
         return 1;
     }
 
-    // Start playing.
-    gst_element_set_state(playbin, GST_STATE_PLAYING);
-    GstBus *bus = gst_element_get_bus(playbin);
+    // Start playing
+    gst_element_set_state(playbin.get(), GST_STATE_PLAYING);
+    GstObjectPtr<GstBus> bus(gst_element_get_bus(playbin.get()));
 
     // Setup clock for measuring FPS
     using Clock = std::chrono::steady_clock;
@@ -69,26 +66,29 @@ int main(int argc, char *argv[]) {
     bool running = true;
     while(running) {
         // Check if any error was occured
-        GstMessage *msg = gst_bus_pop_filtered(
-            bus,
-            static_cast<GstMessageType>(GST_MESSAGE_ERROR | GST_MESSAGE_EOS)
+        GstMessagePtr msg(
+            gst_bus_pop_filtered(
+                bus.get(), 
+                static_cast<GstMessageType>(GST_MESSAGE_ERROR | GST_MESSAGE_EOS)
+            )
         );
         if (msg != nullptr) {
-            if (GST_MESSAGE_TYPE(msg) == GST_MESSAGE_ERROR) {
+            if (GST_MESSAGE_TYPE(msg.get()) == GST_MESSAGE_ERROR) {
                 GError *error = nullptr;
                 gchar *debug_info = nullptr;
-                gst_message_parse_error(msg, &error, &debug_info);
+
+                gst_message_parse_error(msg.get(), &error, &debug_info);
                 g_printerr("Error from %s: %s\n", GST_OBJECT_NAME(msg->src), error->message);
                 if (debug_info != nullptr) {
                     g_printerr("Debug details: %s\n", debug_info);
                 }
+                
                 g_clear_error(&error);
                 g_free(debug_info);
                 running = false;
-            } else if (GST_MESSAGE_TYPE(msg) == GST_MESSAGE_EOS) {
+            } else if (GST_MESSAGE_TYPE(msg.get()) == GST_MESSAGE_EOS) {
                 g_print("End of stream.\n");
             }
-            gst_message_unref(msg);
         }
 
         if (!running) {
@@ -96,16 +96,16 @@ int main(int argc, char *argv[]) {
         }
 
         // Get a processed frame from the playback (wait up to 100ms)
-        GstSample* sample = gst_app_sink_try_pull_sample(GST_APP_SINK(appsink), 100 * GST_MSECOND);
+        GstSamplePtr sample(gst_app_sink_try_pull_sample(GST_APP_SINK(appsink.get()), 100 * GST_MSECOND));
         if (sample == nullptr) {
             // Break the loop on EOS.
-            if (gst_app_sink_is_eos(GST_APP_SINK(appsink))) {
+            if (gst_app_sink_is_eos(GST_APP_SINK(appsink.get()))) {
                 break;
             }
             continue;
         }
-        
-        GstBuffer* frame = gst_sample_get_buffer(sample);
+
+        GstBuffer* frame = gst_sample_get_buffer(sample.get());
         if (frame != nullptr) {
             ++frame_count;
             // DO SOMETHING
@@ -117,14 +117,9 @@ int main(int argc, char *argv[]) {
                 window_start = now;
             }
         }
-
-        gst_sample_unref(sample);
     }
 
-    // Clean up.
-    gst_element_set_state(playbin, GST_STATE_NULL);
-    gst_object_unref(bus);
-    gst_object_unref(playbin);
-    gst_object_unref(appsink);
+    // playbin must reach the NULL state before its last reference is released.
+    gst_element_set_state(playbin.get(), GST_STATE_NULL);
     return 0;
 }
