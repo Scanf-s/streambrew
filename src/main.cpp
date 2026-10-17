@@ -1,8 +1,9 @@
 #include <gst/gst.h>
 #include <iostream>
 #include <chrono>
-#include <gst/app/gstappsink.h>
+#include <exception>
 
+#include "frame_pipeline.h"
 #include "gst_ptr.h"
 
 using Clock = std::chrono::steady_clock;
@@ -20,107 +21,38 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Build pipeline elements
-    // Playbin element
-    GstObjectPtr<GstElement> playbin(gst_element_factory_make("playbin", nullptr));
-    if (playbin == nullptr) {
-        g_printerr("Could not create the GStreamer playbin element.\n");
-        return 1;
-    }
-    g_object_set(playbin.get(), "uri", uri.get(), nullptr);
-
-    // Normalize decoded video to a 30 FPS timeline.
-    GstObjectPtr<GstElement> sink_bin(gst_parse_bin_from_description(
-        "videorate ! "
-        "video/x-raw,framerate=30/1 ! "
-        "appsink name=frames sync=true",
-        TRUE, // Automatically create a ghost pad for the unconnected input.
-        &error
-    ));
-    if (error != nullptr || sink_bin == nullptr) {
-        g_printerr("Cannot create video sink: %s\n", error ? error->message : "unknown error");
-        g_clear_error(&error);
-        return 1;
-    }
-
-    // playbin takes ownership of sink_bin's floating reference.
-    // So sink_bin must give up its ownership by calling .release()
-    GstElement *sink_bin_view = sink_bin.release();
-    g_object_set(playbin.get(), "video-sink", sink_bin_view, nullptr);
-
-    // get appsink element from sink_bin
-    GstObjectPtr<GstElement> appsink(gst_bin_get_by_name(GST_BIN(sink_bin_view), "frames"));
-    if (appsink == nullptr) {
-        g_printerr("Could not create the GStreamer appsink element\n");
-        return 1;
-    }
-
-    // Start playing
-    gst_element_set_state(playbin.get(), GST_STATE_PLAYING);
-    GstObjectPtr<GstBus> bus(gst_element_get_bus(playbin.get()));
-
     // Setup clock for measuring FPS
     auto window_start = Clock::now();
     unsigned int frame_count = 0;
 
-    // Get processed frame from the appsink consecutively before getting an error or EOS.
-    bool running = true;
-    while(running) {
-        // Check if any error was occured
-        GstMessagePtr msg(
-            gst_bus_pop_filtered(
-                bus.get(), 
-                static_cast<GstMessageType>(GST_MESSAGE_ERROR | GST_MESSAGE_EOS)
-            )
-        );
-        if (msg != nullptr) {
-            if (GST_MESSAGE_TYPE(msg.get()) == GST_MESSAGE_ERROR) {
-                GError *error = nullptr;
-                gchar *debug_info = nullptr;
-
-                gst_message_parse_error(msg.get(), &error, &debug_info);
-                g_printerr("Error from %s: %s\n", GST_OBJECT_NAME(msg->src), error->message);
-                if (debug_info != nullptr) {
-                    g_printerr("Debug details: %s\n", debug_info);
-                }
-
-                g_clear_error(&error);
-                g_free(debug_info);
-                running = false;
-            } else if (GST_MESSAGE_TYPE(msg.get()) == GST_MESSAGE_EOS) {
-                g_print("End of stream.\n");
-            }
+    // Define a callback function for custom frame processing logic
+    auto on_frame = [&](GstSample *sample) {
+        GstBuffer* frame = gst_sample_get_buffer(sample);
+        if (frame == nullptr) {
+            return;
         }
 
-        if (!running) {
-            break;
+        ++frame_count;
+        // DO SOMETHING
+        auto now = Clock::now();
+        double elapsed_sec = std::chrono::duration<double>(now - window_start).count();
+        if (elapsed_sec >= 1.0) {
+            std::cout << "Received FPS: " << frame_count / elapsed_sec << '\n';
+            frame_count = 0;
+            window_start = now;
         }
+    };
 
-        // Get a processed frame from the playback (wait up to 100ms)
-        GstSamplePtr sample(gst_app_sink_try_pull_sample(GST_APP_SINK(appsink.get()), 100 * GST_MSECOND));
-        if (sample == nullptr) {
-            // Break the loop on EOS.
-            if (gst_app_sink_is_eos(GST_APP_SINK(appsink.get()))) {
-                break;
-            }
-            continue;
+    try {
+        FramePipeline pipeline(uri.get());
+        if (!pipeline.run(on_frame)) {
+            return 1;
         }
-
-        GstBuffer* frame = gst_sample_get_buffer(sample.get());
-        if (frame != nullptr) {
-            ++frame_count;
-            // DO SOMETHING
-            auto now = Clock::now();
-            double elapsed_sec = std::chrono::duration<double>(now - window_start).count();
-            if (elapsed_sec >= 1.0) {
-                std::cout << "Received FPS: " << frame_count / elapsed_sec << '\n';
-                frame_count = 0;
-                window_start = now;
-            }
-        }
+    } catch (const std::exception &e) {
+        g_printerr("%s\n", e.what());
+        return 1;
     }
 
-    // playbin must reach the NULL state before its last reference is released.
-    gst_element_set_state(playbin.get(), GST_STATE_NULL);
+    g_print("End of stream.\n");
     return 0;
 }
