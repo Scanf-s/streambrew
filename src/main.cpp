@@ -44,13 +44,14 @@ int main(int argc, char *argv[]) {
         gst_object_unref(playbin);
         return 1;
     }
+
+    // playbin has responsibility to clean up the sink_bin
     g_object_set(playbin, "video-sink", sink_bin, nullptr);
 
     // get appsink element from sink_bin
     GstElement *appsink = gst_bin_get_by_name(GST_BIN(sink_bin), "frames");
     if (appsink == nullptr) {
         g_printerr("Could not create the GStreamer appsink element\n");
-        gst_object_unref(sink_bin);
         gst_object_unref(playbin);
         return 1;
     }
