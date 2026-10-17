@@ -7,6 +7,7 @@
 
 #include "gst_ptr.h"
 
+namespace streambrew {
 // Decodes a URI with playbin and passes each frame, 
 // normalize video with fixed frame rate, and send it to a callback.
 class FramePipeline {
@@ -32,7 +33,8 @@ private:
 
     // The destructor body runs before these members release their references,
     // so the pipeline is already in the NULL state at that point.
-    GstObjectPtr<GstElement> pipeline_;
-    GstObjectPtr<GstElement> appsink_;
-    GstObjectPtr<GstBus> bus_;
+    gst::GstObjectPtr<GstElement> pipeline_;
+    gst::GstObjectPtr<GstElement> appsink_;
+    gst::GstObjectPtr<GstBus> bus_;
 };
+}

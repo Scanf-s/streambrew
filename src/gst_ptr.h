@@ -4,6 +4,8 @@
 
 #include <gst/gst.h>
 
+namespace streambrew::gst {
+
 struct GstObjectUnref {
     void operator()(gpointer object) const { gst_object_unref(object); }
 };
@@ -29,3 +31,5 @@ struct GErrorClear {
     void operator()(GError *error) const { g_error_free(error); }
 };
 using GErrorPtr = std::unique_ptr<GError, GErrorClear>;
+
+}

@@ -5,6 +5,7 @@
 
 #include <gst/app/gstappsink.h>
 
+namespace streambrew {
 // Define FramePipeline constructor
 FramePipeline::FramePipeline(const std::string &uri, int fps)
     : pipeline_(gst_element_factory_make("playbin", nullptr)) {
@@ -19,12 +20,12 @@ FramePipeline::FramePipeline(const std::string &uri, int fps)
         "video/x-raw,framerate=" + std::to_string(fps) + "/1 ! "
         "appsink name=frames sync=true";
     GError *raw_error = nullptr;
-    GstObjectPtr<GstElement> sink_bin(gst_parse_bin_from_description(
+    gst::GstObjectPtr<GstElement> sink_bin(gst_parse_bin_from_description(
         description.c_str(),
         TRUE, // Automatically create a ghost pad for the unconnected input.
         &raw_error
     ));
-    GErrorPtr error(raw_error);
+    gst::GErrorPtr error(raw_error);
     
     if (sink_bin == nullptr) {
         std::string message = error != nullptr ? error->message : "unknown error";
@@ -69,7 +70,7 @@ bool FramePipeline::run(const FrameCallback &on_frame) {
         }
 
         // Get a processed frame from the appsink (wait up to 100ms)
-        GstSamplePtr sample(
+        gst::GstSamplePtr sample(
             gst_app_sink_try_pull_sample(GST_APP_SINK(appsink_.get()),
             100 * GST_MSECOND)
         );
@@ -87,7 +88,7 @@ bool FramePipeline::run(const FrameCallback &on_frame) {
 
 // poll_bus checks the event message from GStreamer sent 
 FramePipeline::BusStatus FramePipeline::poll_bus() {
-    GstMessagePtr msg(
+    gst::GstMessagePtr msg(
         gst_bus_pop_filtered(
             bus_.get(),
             static_cast<GstMessageType>(GST_MESSAGE_ERROR | GST_MESSAGE_EOS)
@@ -105,12 +106,13 @@ FramePipeline::BusStatus FramePipeline::poll_bus() {
     gst_message_parse_error(msg.get(), &raw_error, &raw_debug);
 
     // Change error, debug message ptr ownership (for safe manage management)
-    GErrorPtr error(raw_error);
-    GCharPtr debug_info(raw_debug);
+    gst::GErrorPtr error(raw_error);
+    gst::GCharPtr debug_info(raw_debug);
     g_printerr("Error from %s: %s\n", GST_OBJECT_NAME(msg->src), error->message);
     if (debug_info != nullptr) {
         g_printerr("Debug details: %s\n", debug_info.get());
     }
 
     return BusStatus::Error;
+}
 }
