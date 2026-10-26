@@ -70,3 +70,6 @@ Testing/
 
 # Media
 *.mp4
+
+# Project
+docs/

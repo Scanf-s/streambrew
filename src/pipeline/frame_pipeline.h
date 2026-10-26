@@ -5,7 +5,7 @@
 
 #include <gst/gst.h>
 
-#include "gst_ptr.h"
+#include "gstreamer/gst_ptr.h"
 
 namespace streambrew {
 // Decodes a URI with playbin and passes each frame, 

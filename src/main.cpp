@@ -3,8 +3,8 @@
 #include <chrono>
 #include <exception>
 
-#include "frame_pipeline.h"
-#include "gst_ptr.h"
+#include "pipeline/frame_pipeline.h"
+#include "gstreamer/gst_ptr.h"
 
 using Clock = std::chrono::steady_clock;
 

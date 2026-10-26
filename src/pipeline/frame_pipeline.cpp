@@ -1,5 +1,5 @@
-#include "frame_pipeline.h"
-#include "gst_ptr.h"
+#include "pipeline/frame_pipeline.h"
+#include "gstreamer/gst_ptr.h"
 
 #include <stdexcept>
 
