@@ -5,6 +5,7 @@
 
 #include "pipeline/frame_pipeline.h"
 #include "gstreamer/gst_ptr.h"
+#include "frame/frame.h"
 
 using Clock = std::chrono::steady_clock;
 
@@ -26,17 +27,14 @@ int main(int argc, char *argv[]) {
     unsigned int frame_count = 0;
 
     // Define a callback function for custom frame processing logic
-    auto on_frame = [&](GstSample *sample) {
-        GstBuffer* frame = gst_sample_get_buffer(sample);
-        if (frame == nullptr) {
-            return;
-        }
-
+    auto on_frame = [&](const streambrew::Frame &frame) {
         ++frame_count;
         // DO SOMETHING
         auto now = Clock::now();
         double elapsed_sec = std::chrono::duration<double>(now - window_start).count();
         if (elapsed_sec >= 1.0) {
+            std::cout << "frame info" << '\n';
+            std::cout << frame.width << "x" << frame.height << " stride=" << frame.stride << '\n';
             std::cout << "Received FPS: " << frame_count / elapsed_sec << '\n';
             frame_count = 0;
             window_start = now;
@@ -44,7 +42,7 @@ int main(int argc, char *argv[]) {
     };
 
     try {
-        streambrew::FramePipeline pipeline(uri.get());
+        streambrew::FramePipeline pipeline(uri.get(), "RGB");
         if (!pipeline.run(on_frame)) {
             return 1;
         }

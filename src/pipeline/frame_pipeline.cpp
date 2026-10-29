@@ -1,13 +1,14 @@
 #include "pipeline/frame_pipeline.h"
 #include "gstreamer/gst_ptr.h"
+#include "frame/frame.h"
 
 #include <stdexcept>
-
+#include <gst/video/video.h>
 #include <gst/app/gstappsink.h>
 
 namespace streambrew {
 // Define FramePipeline constructor
-FramePipeline::FramePipeline(const std::string &uri, int fps)
+FramePipeline::FramePipeline(const std::string &uri, const std::string &format, int fps)
     : pipeline_(gst_element_factory_make("playbin", nullptr)) {
     if (pipeline_ == nullptr) {
         throw std::runtime_error("Could not create the GStreamer playbin element.");
@@ -17,7 +18,8 @@ FramePipeline::FramePipeline(const std::string &uri, int fps)
     // Normalize decoded video to a fixed frame rate.
     const std::string description =
         "videorate ! "
-        "video/x-raw,framerate=" + std::to_string(fps) + "/1 ! "
+        "videoconvert ! "
+        "video/x-raw,format=" + format + ",framerate=" + std::to_string(fps) + "/1 ! "
         "appsink name=frames sync=true";
     GError *raw_error = nullptr;
     gst::ObjectPtr<GstElement> sink_bin(gst_parse_bin_from_description(
@@ -80,9 +82,26 @@ bool FramePipeline::run(const FrameCallback &on_frame) {
             }
             continue;
         }
+        
+        GstVideoInfo video_info;
+        if (!gst_video_info_from_caps(&video_info, gst_sample_get_caps(sample.get()))) {
+            continue;
+        }
+
+        GstVideoFrame video_frame;
+        if (!gst_video_frame_map(&video_frame, &video_info, gst_sample_get_buffer(sample.get()), GST_MAP_READ)) {
+            continue;
+        }
+
+        streambrew::Frame frame;
+        frame.data = static_cast<const std::uint8_t *>(GST_VIDEO_FRAME_PLANE_DATA(&video_frame, 0));
+        frame.width = GST_VIDEO_FRAME_WIDTH(&video_frame);
+        frame.height = GST_VIDEO_FRAME_HEIGHT(&video_frame);
+        frame.stride = GST_VIDEO_FRAME_PLANE_STRIDE(&video_frame, 0);
 
         // call user-defined callback function for their own frame processing logic
-        on_frame(sample.get());
+        on_frame(frame);
+        gst_video_frame_unmap(&video_frame);
     }
 }
 

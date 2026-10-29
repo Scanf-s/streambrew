@@ -5,6 +5,7 @@
 
 #include <gst/gst.h>
 
+#include "frame/frame.h"
 #include "gstreamer/gst_ptr.h"
 
 namespace streambrew {
@@ -12,10 +13,10 @@ namespace streambrew {
 // normalize video with fixed frame rate, and send it to a callback.
 class FramePipeline {
 public:
-    using FrameCallback = std::function<void(GstSample *sample)>;
+    using FrameCallback = std::function<void(const Frame &frame)>;
 
     // Throws std::runtime_error if the pipeline cannot be built.
-    explicit FramePipeline(const std::string &uri, int fps = 30);
+    explicit FramePipeline(const std::string &uri, const std::string &format, int fps = 30);
     ~FramePipeline();
 
     // A copy would stop and release the same pipeline a second time.
