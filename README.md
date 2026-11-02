@@ -1,4 +1,4 @@
-# Stream-brew
+# Streambrew
 
 Video processing experiments
 
