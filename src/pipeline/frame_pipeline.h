@@ -15,20 +15,20 @@ class FramePipeline {
 public:
     using FrameCallback = std::function<void(const Frame &frame)>;
 
-    // Throws std::runtime_error if the pipeline cannot be built.
-    explicit FramePipeline(const std::string &uri, const std::string &format, int fps = 30);
+    // Throws std::runtime_error if the pipeline cannot be built or invalid arguments are passed
+    explicit FramePipeline(const std::string &source, const std::string &format, int fps = 30);
     ~FramePipeline();
 
     // A copy would stop and release the same pipeline a second time.
     FramePipeline(const FramePipeline &) = delete;
     FramePipeline &operator=(const FramePipeline &) = delete;
 
-    // Plays until EOS or an error. Returns true on EOS and false on error.
+    // Plays until EOS or an error.
     // The sample passed to on_frame is valid only during that call.
-    bool run(const FrameCallback &on_frame);
+    void run(const FrameCallback &on_frame);
 
 private:
-    enum class BusStatus { Running, Eos, Error };
+    enum class BusStatus { Running, Eos };
 
     BusStatus poll_bus();
 

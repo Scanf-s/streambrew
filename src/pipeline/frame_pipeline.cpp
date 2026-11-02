@@ -7,12 +7,41 @@
 #include <gst/app/gstappsink.h>
 
 namespace streambrew {
+
+namespace {
+GstElement *create_playbin() {
+    gst_init(nullptr, nullptr);
+    return gst_element_factory_make("playbin", nullptr);
+}
+
+std::string to_uri(const std::string &source) {
+    if (gst_uri_is_valid(source.c_str())) {
+        return source;
+    }
+    GError *raw_error = nullptr;
+    gst::CharPtr uri(gst_filename_to_uri(source.c_str(), &raw_error));
+    gst::ErrorPtr error(raw_error);
+    if (uri == nullptr) {
+        throw std::runtime_error("cannot convert " + source + " to a URI: " + error->message);
+    }
+    return uri.get();
+}
+} // namespace
+
 // Define FramePipeline constructor
-FramePipeline::FramePipeline(const std::string &uri, const std::string &format, int fps)
-    : pipeline_(gst_element_factory_make("playbin", nullptr)) {
+FramePipeline::FramePipeline(
+    const std::string &source,
+    const std::string &format, 
+    int fps) 
+    : pipeline_(create_playbin()) {
+
     if (pipeline_ == nullptr) {
         throw std::runtime_error("Could not create the GStreamer playbin element.");
     }
+    if (fps <= 0) {
+        throw std::invalid_argument("fps must be greater than 0");
+    }
+    const std::string uri = to_uri(source);
     g_object_set(pipeline_.get(), "uri", uri.c_str(), nullptr);
 
     // Normalize decoded video to a fixed frame rate.
@@ -52,23 +81,20 @@ FramePipeline::~FramePipeline() {
 }
 
 // run pre-defined GStreamer video processing pipeline
-bool FramePipeline::run(const FrameCallback &on_frame) {
+void FramePipeline::run(const FrameCallback &on_frame) {
     if (
         gst_element_set_state(pipeline_.get(), GST_STATE_PLAYING) == 
         GST_STATE_CHANGE_FAILURE
     ) {
         // The element that failed usually posts the reason on the bus.
         poll_bus();
-        return false;
+        throw std::runtime_error("Could not start the pipeline.");
     }
 
     while (true) {
         BusStatus status = poll_bus();
-        if (status == BusStatus::Error) {
-            return false;
-        }
         if (status == BusStatus::Eos) {
-            return true;
+            break;
         }
 
         // Get a processed frame from the appsink (wait up to 100ms)
@@ -78,7 +104,7 @@ bool FramePipeline::run(const FrameCallback &on_frame) {
         );
         if (sample == nullptr) {
             if (gst_app_sink_is_eos(GST_APP_SINK(appsink_.get()))) {
-                return true;
+                break;
             }
             continue;
         }
@@ -127,11 +153,11 @@ FramePipeline::BusStatus FramePipeline::poll_bus() {
     // Change error, debug message ptr ownership (for safe manage management)
     gst::ErrorPtr error(raw_error);
     gst::CharPtr debug_info(raw_debug);
-    g_printerr("Error from %s: %s\n", GST_OBJECT_NAME(msg->src), error->message);
+    std::string message = std::string("Error from ") + GST_OBJECT_NAME(msg->src) + ": " + error->message;
     if (debug_info != nullptr) {
-        g_printerr("Debug details: %s\n", debug_info.get());
+        message += "\nDebug details: ";
+        message += debug_info.get();
     }
-
-    return BusStatus::Error;
+    throw std::runtime_error(message);
 }
 } // namespace streambrew

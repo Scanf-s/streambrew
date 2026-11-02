@@ -1,26 +1,14 @@
-#include <gst/gst.h>
 #include <iostream>
 #include <chrono>
 #include <exception>
 
 #include "pipeline/frame_pipeline.h"
-#include "gstreamer/gst_ptr.h"
 #include "frame/frame.h"
 
 using Clock = std::chrono::steady_clock;
 
 int main(int argc, char *argv[]) {
-    // Initialize GStreamer.
-    gst_init(&argc, &argv);
-
-    const char *filename = argc > 1 ? argv[1] : "sample.mp4";
-    GError *error = nullptr;
-    streambrew::gst::CharPtr uri(gst_filename_to_uri(filename, &error));
-    if (uri == nullptr) {
-        g_printerr("Cannot convert %s to a URI: %s\n", filename, error->message);
-        g_clear_error(&error);
-        return 1;
-    }
+    const char *source = argc > 1 ? argv[1] : "sample.mp4";
 
     // Setup clock for measuring FPS
     auto window_start = Clock::now();
@@ -41,16 +29,15 @@ int main(int argc, char *argv[]) {
         }
     };
 
+    // Request video pipeline
     try {
-        streambrew::FramePipeline pipeline(uri.get(), "RGB");
-        if (!pipeline.run(on_frame)) {
-            return 1;
-        }
+        streambrew::FramePipeline pipeline(source, "RGB");
+        pipeline.run(on_frame);
     } catch (const std::exception &e) {
-        g_printerr("%s\n", e.what());
+        std::cerr << e.what() << '\n';
         return 1;
     }
 
-    g_print("End of stream.\n");
+    std::cout << "End of stream.\n";
     return 0;
 }
