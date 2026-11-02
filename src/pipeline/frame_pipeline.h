@@ -16,7 +16,7 @@ public:
     using FrameCallback = std::function<void(const Frame &frame)>;
 
     // Throws std::runtime_error if the pipeline cannot be built or invalid arguments are passed
-    explicit FramePipeline(const std::string &source, const std::string &format, int fps = 30);
+    explicit FramePipeline(const std::string &source, PixelFormat format, int fps = 30);
     ~FramePipeline();
 
     // A copy would stop and release the same pipeline a second time.
@@ -28,6 +28,9 @@ public:
     void run(const FrameCallback &on_frame);
 
 private:
+
+    PixelFormat pixel_format_;
+
     enum class BusStatus { Running, Eos };
 
     BusStatus poll_bus();

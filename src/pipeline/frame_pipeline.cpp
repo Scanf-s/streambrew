@@ -14,6 +14,18 @@ GstElement *create_playbin() {
     return gst_element_factory_make("playbin", nullptr);
 }
 
+const char *to_gst_format(PixelFormat format) {
+    switch (format) {
+    case PixelFormat::RGB:
+        return "RGB";
+    case PixelFormat::BGR:
+        return "BGR";
+    case PixelFormat::GRAY8:
+        return "GRAY8";
+    }
+    throw std::invalid_argument("invalid pixel format");
+}
+
 std::string to_uri(const std::string &source) {
     if (gst_uri_is_valid(source.c_str())) {
         return source;
@@ -31,9 +43,9 @@ std::string to_uri(const std::string &source) {
 // Define FramePipeline constructor
 FramePipeline::FramePipeline(
     const std::string &source,
-    const std::string &format, 
+    PixelFormat format, 
     int fps) 
-    : pipeline_(create_playbin()) {
+    : pixel_format_(format), pipeline_(create_playbin()) {
 
     if (pipeline_ == nullptr) {
         throw std::runtime_error("Could not create the GStreamer playbin element.");
@@ -48,8 +60,11 @@ FramePipeline::FramePipeline(
     const std::string description =
         "videorate ! "
         "videoconvert ! "
-        "video/x-raw,format=" + format + ",framerate=" + std::to_string(fps) + "/1 ! "
+        "video/x-raw,format=" + std::string(to_gst_format(format)) + ",framerate=" + std::to_string(fps) + "/1 ! "
         "appsink name=frames sync=true";
+    
+    // create new sink_bin to attach whole description pipeline elements 
+    // into the video-sink property of playbin
     GError *raw_error = nullptr;
     gst::ObjectPtr<GstElement> sink_bin(gst_parse_bin_from_description(
         description.c_str(),
@@ -57,7 +72,6 @@ FramePipeline::FramePipeline(
         &raw_error
     ));
     gst::ErrorPtr error(raw_error);
-    
     if (error != nullptr || sink_bin == nullptr) {
         std::string message = error != nullptr ? error->message : "unknown error";
         throw std::runtime_error("Cannot create video sink: " + message);
@@ -124,6 +138,7 @@ void FramePipeline::run(const FrameCallback &on_frame) {
         frame.width = GST_VIDEO_FRAME_WIDTH(&video_frame);
         frame.height = GST_VIDEO_FRAME_HEIGHT(&video_frame);
         frame.stride = GST_VIDEO_FRAME_PLANE_STRIDE(&video_frame, 0);
+        frame.format = pixel_format_;
 
         // call user-defined callback function for their own frame processing logic
         on_frame(frame);

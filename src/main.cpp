@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
 
     // Request video pipeline
     try {
-        streambrew::FramePipeline pipeline(source, "RGB");
+        streambrew::FramePipeline pipeline(source, streambrew::PixelFormat::RGB);
         pipeline.run(on_frame);
     } catch (const std::exception &e) {
         std::cerr << e.what() << '\n';
