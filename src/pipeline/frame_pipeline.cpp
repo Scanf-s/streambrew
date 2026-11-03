@@ -22,7 +22,7 @@ const char *to_gst_format(PixelFormat format) {
         return "BGR";
     case PixelFormat::GRAY8:
         return "GRAY8";
-    }
+    }₩
     throw std::invalid_argument("invalid pixel format");
 }
 
@@ -34,7 +34,8 @@ std::string to_uri(const std::string &source) {
     gst::CharPtr uri(gst_filename_to_uri(source.c_str(), &raw_error));
     gst::ErrorPtr error(raw_error);
     if (uri == nullptr) {
-        throw std::runtime_error("cannot convert " + source + " to a URI: " + error->message);
+        std::string message = error != nullptr ? error->message : "unknown error";
+        throw std::runtime_error("cannot convert " + source + " to a URI: " + message);
     }
     return uri.get();
 }
@@ -128,21 +129,22 @@ void FramePipeline::run(const FrameCallback &on_frame) {
             continue;
         }
 
-        GstVideoFrame video_frame;
-        if (!gst_video_frame_map(&video_frame, &video_info, gst_sample_get_buffer(sample.get()), GST_MAP_READ)) {
+        GstVideoFrame gst_video_frame;
+        if (!gst_video_frame_map(&gst_video_frame, &video_info, gst_sample_get_buffer(sample.get()), GST_MAP_READ)) {
             continue;
         }
+        // Declared after gst_video_frame, so it unmaps when gst_video_frame is out of scope
+        gst::VideoFramePtr video_frame(&gst_video_frame);
 
         streambrew::Frame frame;
-        frame.data = static_cast<const std::uint8_t *>(GST_VIDEO_FRAME_PLANE_DATA(&video_frame, 0));
-        frame.width = GST_VIDEO_FRAME_WIDTH(&video_frame);
-        frame.height = GST_VIDEO_FRAME_HEIGHT(&video_frame);
-        frame.stride = GST_VIDEO_FRAME_PLANE_STRIDE(&video_frame, 0);
+        frame.data = static_cast<const std::uint8_t *>(GST_VIDEO_FRAME_PLANE_DATA(&gst_video_frame, 0));
+        frame.width = GST_VIDEO_FRAME_WIDTH(&gst_video_frame);
+        frame.height = GST_VIDEO_FRAME_HEIGHT(&gst_video_frame);
+        frame.stride = GST_VIDEO_FRAME_PLANE_STRIDE(&gst_video_frame, 0);
         frame.format = pixel_format_;
 
         // call user-defined callback function for their own frame processing logic
         on_frame(frame);
-        gst_video_frame_unmap(&video_frame);
     }
 }
 

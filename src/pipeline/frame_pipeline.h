@@ -24,7 +24,6 @@ public:
     FramePipeline &operator=(const FramePipeline &) = delete;
 
     // Plays until EOS or an error.
-    // The sample passed to on_frame is valid only during that call.
     void run(const FrameCallback &on_frame);
 
 private:
