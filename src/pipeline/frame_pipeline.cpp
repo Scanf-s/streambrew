@@ -22,7 +22,7 @@ const char *to_gst_format(PixelFormat format) {
         return "BGR";
     case PixelFormat::GRAY8:
         return "GRAY8";
-    }₩
+    }
     throw std::invalid_argument("invalid pixel format");
 }
 
