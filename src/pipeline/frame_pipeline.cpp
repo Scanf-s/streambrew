@@ -26,6 +26,22 @@ const char *to_gst_format(PixelFormat format) {
     throw std::invalid_argument("invalid pixel format");
 }
 
+void validate_options(const PipelineOptions &options) {
+    if (options.timing != DeliveryTiming::AsFastAsPossible &&
+        options.timing != DeliveryTiming::Clocked) {
+        throw std::invalid_argument("invalid delivery timing");
+    }
+
+    if (options.overflow != OverflowPolicy::BlockProducer &&
+        options.overflow != OverflowPolicy::DropOldest) {
+        throw std::invalid_argument("invalid overflow policy");
+    }
+
+    if (options.max_pending_frames == 0 || options.max_pending_frames > G_MAXUINT) {
+        throw std::invalid_argument("max_pending_frames must be in [1, G_MAXUINT]");
+    }
+}
+
 std::string to_uri(const std::string &source) {
     if (gst_uri_is_valid(source.c_str())) {
         return source;
@@ -41,11 +57,17 @@ std::string to_uri(const std::string &source) {
 }
 } // namespace
 
-// Define FramePipeline constructor
 FramePipeline::FramePipeline(
     const std::string &source,
-    PixelFormat format, 
-    int fps) 
+    PixelFormat format,
+    int fps)
+    : FramePipeline(source, format, PipelineOptions{}, fps) {}
+
+FramePipeline::FramePipeline(
+    const std::string &source,
+    PixelFormat format,
+    const PipelineOptions &options,
+    int fps)
     : pixel_format_(format), pipeline_(create_playbin()) {
 
     if (pipeline_ == nullptr) {
@@ -54,15 +76,27 @@ FramePipeline::FramePipeline(
     if (fps <= 0) {
         throw std::invalid_argument("fps must be greater than 0");
     }
+
+    validate_options(options);
+
     const std::string uri = to_uri(source);
+
     g_object_set(pipeline_.get(), "uri", uri.c_str(), nullptr);
+
+    if (options.timing == DeliveryTiming::AsFastAsPossible) {
+        // Disable audio so an audio sink cannot pace file processing
+        constexpr guint play_flag_audio = 1u << 1;
+        guint flags = 0;
+        g_object_get(pipeline_.get(), "flags", &flags, nullptr);
+        g_object_set(pipeline_.get(), "flags", flags & ~play_flag_audio, nullptr);
+    }
 
     // Normalize decoded video to a fixed frame rate.
     const std::string description =
         "videorate ! "
         "videoconvert ! "
         "video/x-raw,format=" + std::string(to_gst_format(format)) + ",framerate=" + std::to_string(fps) + "/1 ! "
-        "appsink name=frames sync=true";
+        "appsink name=frames";
     
     // create new sink_bin to attach whole description pipeline elements 
     // into the video-sink property of playbin
@@ -86,6 +120,12 @@ FramePipeline::FramePipeline(
     if (appsink_ == nullptr) {
         throw std::runtime_error("Could not find the appsink element.");
     }
+
+    g_object_set(appsink_.get(),
+                 "sync", static_cast<gboolean>(options.timing == DeliveryTiming::Clocked),
+                 "max-buffers", static_cast<guint>(options.max_pending_frames),
+                 "drop", static_cast<gboolean>(options.overflow == OverflowPolicy::DropOldest),
+                 nullptr);
 
     bus_.reset(gst_element_get_bus(pipeline_.get()));
 }
