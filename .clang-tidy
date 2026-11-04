@@ -1,0 +1,11 @@
+# GstMessageType accepts bitmask combinations that EnumCastOutOfRange flags.
+# Enum storage size is an API choice, not a required optimization here.
+Checks: >-
+  -*,
+  clang-analyzer-*,
+  bugprone-*,
+  performance-*,
+  -clang-analyzer-optin.core.EnumCastOutOfRange,
+  -performance-enum-size
+WarningsAsErrors: '*'
+HeaderFilterRegex: '(^|.*/)(src|tests)/'
