@@ -14,6 +14,27 @@ cmake --build build
 
 Pass another file path to play a different video. VS Code reads the include paths from CMake's `build/compile_commands.json`.
 
+## Development commands
+
+```sh
+make build                   # Configure and build
+make run SOURCE=sample.mp4   # Build and process a video
+make test                    # Build and run tests
+make format                  # Apply formatting to C++ sources and headers
+make format-check            # Check formatting without changing files
+make lint                    # Run static analysis; warnings cause failure
+make check                   # Run format-check, lint, and tests
+make clean                   # Remove build outputs, keeping CMake configuration
+```
+
+Override the build directory, build type, or parallelism as needed
+
+```sh
+make test BUILD_DIR=build-debug BUILD_TYPE=Debug JOBS=4
+```
+
+Tool paths can also be overridden, for example `make lint CLANG_TIDY=clang-tidy-18`.
+
 ## Frame delivery API
 
 ```cpp

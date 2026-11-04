@@ -21,15 +21,13 @@ void require(bool condition, const char *message) {
 
 void write_fixture(const char *path, bool with_audio) {
     streambrew::gst::CharPtr escaped(g_strescape(path, nullptr));
-    std::string description =
-        "videotestsrc pattern=snow num-buffers=60 ! "
-        "video/x-raw,format=BGR,width=32,height=24,framerate=30/1 ! "
-        "queue ! mux. avimux name=mux ! filesink location=\"" +
-        std::string(escaped.get()) + "\"";
+    std::string description = "videotestsrc pattern=snow num-buffers=60 ! "
+                              "video/x-raw,format=BGR,width=32,height=24,framerate=30/1 ! "
+                              "queue ! mux. avimux name=mux ! filesink location=\"" +
+                              std::string(escaped.get()) + "\"";
     if (with_audio) {
-        description +=
-            " audiotestsrc num-buffers=20 samplesperbuffer=800 ! "
-            "audio/x-raw,format=S16LE,rate=8000,channels=1 ! queue ! mux.";
+        description += " audiotestsrc num-buffers=20 samplesperbuffer=800 ! "
+                       "audio/x-raw,format=S16LE,rate=8000,channels=1 ! queue ! mux.";
     }
 
     GError *raw_error = nullptr;
@@ -78,8 +76,7 @@ RunResult run(const char *path, const streambrew::PipelineOptions &options,
     return result;
 }
 
-template <typename Action>
-void expect_invalid(Action action) {
+template <typename Action> void expect_invalid(Action action) {
     try {
         action();
     } catch (const std::invalid_argument &) {
@@ -157,8 +154,8 @@ int main(int argc, char **argv) {
         std::cout << "Passed: timing, audio, backpressure, DropOldest, EOS, validation\n";
         std::cout << "Frames: fast=" << baseline.frames.size()
                   << " sequential=" << sequential.frames.size()
-                  << " clocked=" << clocked.frames.size()
-                  << " DropOldest=" << dropped.frames.size() << '\n';
+                  << " clocked=" << clocked.frames.size() << " DropOldest=" << dropped.frames.size()
+                  << '\n';
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';
         return 1;

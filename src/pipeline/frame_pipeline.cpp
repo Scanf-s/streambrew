@@ -1,10 +1,10 @@
 #include "pipeline/frame_pipeline.h"
-#include "gstreamer/gst_ptr.h"
 #include "frame/frame.h"
+#include "gstreamer/gst_ptr.h"
 
-#include <stdexcept>
-#include <gst/video/video.h>
 #include <gst/app/gstappsink.h>
+#include <gst/video/video.h>
+#include <stdexcept>
 
 namespace streambrew {
 
@@ -57,17 +57,11 @@ std::string to_uri(const std::string &source) {
 }
 } // namespace
 
-FramePipeline::FramePipeline(
-    const std::string &source,
-    PixelFormat format,
-    int fps)
+FramePipeline::FramePipeline(const std::string &source, PixelFormat format, int fps)
     : FramePipeline(source, format, PipelineOptions{}, fps) {}
 
-FramePipeline::FramePipeline(
-    const std::string &source,
-    PixelFormat format,
-    const PipelineOptions &options,
-    int fps)
+FramePipeline::FramePipeline(const std::string &source, PixelFormat format,
+                             const PipelineOptions &options, int fps)
     : pixel_format_(format), pipeline_(create_playbin()) {
 
     if (pipeline_ == nullptr) {
@@ -92,20 +86,21 @@ FramePipeline::FramePipeline(
     }
 
     // Normalize decoded video to a fixed frame rate.
-    const std::string description =
-        "videorate ! "
-        "videoconvert ! "
-        "video/x-raw,format=" + std::string(to_gst_format(format)) + ",framerate=" + std::to_string(fps) + "/1 ! "
-        "appsink name=frames";
-    
-    // create new sink_bin to attach whole description pipeline elements 
+    const std::string description = "videorate ! "
+                                    "videoconvert ! "
+                                    "video/x-raw,format=" +
+                                    std::string(to_gst_format(format)) +
+                                    ",framerate=" + std::to_string(fps) +
+                                    "/1 ! "
+                                    "appsink name=frames";
+
+    // create new sink_bin to attach whole description pipeline elements
     // into the video-sink property of playbin
     GError *raw_error = nullptr;
     gst::ObjectPtr<GstElement> sink_bin(gst_parse_bin_from_description(
         description.c_str(),
         TRUE, // Automatically create a ghost pad for the unconnected input.
-        &raw_error
-    ));
+        &raw_error));
     gst::ErrorPtr error(raw_error);
     if (error != nullptr || sink_bin == nullptr) {
         std::string message = error != nullptr ? error->message : "unknown error";
@@ -121,11 +116,10 @@ FramePipeline::FramePipeline(
         throw std::runtime_error("Could not find the appsink element.");
     }
 
-    g_object_set(appsink_.get(),
-                 "sync", static_cast<gboolean>(options.timing == DeliveryTiming::Clocked),
-                 "max-buffers", static_cast<guint>(options.max_pending_frames),
-                 "drop", static_cast<gboolean>(options.overflow == OverflowPolicy::DropOldest),
-                 nullptr);
+    g_object_set(appsink_.get(), "sync",
+                 static_cast<gboolean>(options.timing == DeliveryTiming::Clocked), "max-buffers",
+                 static_cast<guint>(options.max_pending_frames), "drop",
+                 static_cast<gboolean>(options.overflow == OverflowPolicy::DropOldest), nullptr);
 
     bus_.reset(gst_element_get_bus(pipeline_.get()));
 }
@@ -137,10 +131,7 @@ FramePipeline::~FramePipeline() {
 
 // run pre-defined GStreamer video processing pipeline
 void FramePipeline::run(const FrameCallback &on_frame) {
-    if (
-        gst_element_set_state(pipeline_.get(), GST_STATE_PLAYING) == 
-        GST_STATE_CHANGE_FAILURE
-    ) {
+    if (gst_element_set_state(pipeline_.get(), GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE) {
         // The element that failed usually posts the reason on the bus.
         poll_bus();
         throw std::runtime_error("Could not start the pipeline.");
@@ -154,30 +145,30 @@ void FramePipeline::run(const FrameCallback &on_frame) {
 
         // Get a processed frame from the appsink (wait up to 100ms)
         gst::SamplePtr sample(
-            gst_app_sink_try_pull_sample(GST_APP_SINK(appsink_.get()),
-            100 * GST_MSECOND)
-        );
+            gst_app_sink_try_pull_sample(GST_APP_SINK(appsink_.get()), 100 * GST_MSECOND));
         if (sample == nullptr) {
             if (gst_app_sink_is_eos(GST_APP_SINK(appsink_.get()))) {
                 break;
             }
             continue;
         }
-        
+
         GstVideoInfo video_info;
         if (!gst_video_info_from_caps(&video_info, gst_sample_get_caps(sample.get()))) {
             continue;
         }
 
         GstVideoFrame gst_video_frame;
-        if (!gst_video_frame_map(&gst_video_frame, &video_info, gst_sample_get_buffer(sample.get()), GST_MAP_READ)) {
+        if (!gst_video_frame_map(&gst_video_frame, &video_info, gst_sample_get_buffer(sample.get()),
+                                 GST_MAP_READ)) {
             continue;
         }
         // Declared after gst_video_frame, so it unmaps when gst_video_frame is out of scope
         gst::VideoFramePtr video_frame(&gst_video_frame);
 
         streambrew::Frame frame;
-        frame.data = static_cast<const std::uint8_t *>(GST_VIDEO_FRAME_PLANE_DATA(&gst_video_frame, 0));
+        frame.data =
+            static_cast<const std::uint8_t *>(GST_VIDEO_FRAME_PLANE_DATA(&gst_video_frame, 0));
         frame.width = GST_VIDEO_FRAME_WIDTH(&gst_video_frame);
         frame.height = GST_VIDEO_FRAME_HEIGHT(&gst_video_frame);
         frame.stride = GST_VIDEO_FRAME_PLANE_STRIDE(&gst_video_frame, 0);
@@ -188,14 +179,10 @@ void FramePipeline::run(const FrameCallback &on_frame) {
     }
 }
 
-// poll_bus checks the event message from GStreamer sent 
+// poll_bus checks the event message from GStreamer sent
 FramePipeline::BusStatus FramePipeline::poll_bus() {
-    gst::MessagePtr msg(
-        gst_bus_pop_filtered(
-            bus_.get(),
-            static_cast<GstMessageType>(GST_MESSAGE_ERROR | GST_MESSAGE_EOS)
-        )
-    );
+    gst::MessagePtr msg(gst_bus_pop_filtered(
+        bus_.get(), static_cast<GstMessageType>(GST_MESSAGE_ERROR | GST_MESSAGE_EOS)));
     if (msg == nullptr) {
         return BusStatus::Running;
     }
@@ -203,14 +190,15 @@ FramePipeline::BusStatus FramePipeline::poll_bus() {
         return BusStatus::Eos;
     }
 
-    GError* raw_error = nullptr;
-    gchar* raw_debug = nullptr;
+    GError *raw_error = nullptr;
+    gchar *raw_debug = nullptr;
     gst_message_parse_error(msg.get(), &raw_error, &raw_debug);
 
     // Change error, debug message ptr ownership (for safe manage management)
     gst::ErrorPtr error(raw_error);
     gst::CharPtr debug_info(raw_debug);
-    std::string message = std::string("Error from ") + GST_OBJECT_NAME(msg->src) + ": " + error->message;
+    std::string message =
+        std::string("Error from ") + GST_OBJECT_NAME(msg->src) + ": " + error->message;
     if (debug_info != nullptr) {
         message += "\nDebug details: ";
         message += debug_info.get();

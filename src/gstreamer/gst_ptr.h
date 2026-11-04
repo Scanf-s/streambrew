@@ -31,14 +31,13 @@ struct VideoFrameUnmap {
     void operator()(GstVideoFrame *frame) const { gst_video_frame_unmap(frame); }
 };
 
-template <typename T>
-using ObjectPtr = std::unique_ptr<T, ObjectUnref>;
+template <typename T> using ObjectPtr = std::unique_ptr<T, ObjectUnref>;
 using MessagePtr = std::unique_ptr<GstMessage, MessageUnref>;
 using SamplePtr = std::unique_ptr<GstSample, SampleUnref>;
 using CharPtr = std::unique_ptr<gchar, Free>;
 using ErrorPtr = std::unique_ptr<GError, ErrorFree>;
 
-// Unlike the other pointers, this does not own the GstVideoFrame. 
+// Unlike the other pointers, this does not own the GstVideoFrame.
 // It only unmaps it, so the GstVideoFrame must stay alive until this pointer is destroyed.
 using VideoFramePtr = std::unique_ptr<GstVideoFrame, VideoFrameUnmap>;
 

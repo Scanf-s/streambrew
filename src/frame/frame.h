@@ -3,11 +3,7 @@
 
 namespace streambrew {
 
-enum class PixelFormat {
-    RGB,
-    BGR,
-    GRAY8
-};
+enum class PixelFormat { RGB, BGR, GRAY8 };
 
 struct Frame {
     const std::uint8_t *data;

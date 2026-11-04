@@ -1,9 +1,9 @@
-#include <iostream>
 #include <chrono>
 #include <exception>
+#include <iostream>
 
-#include "pipeline/frame_pipeline.h"
 #include "frame/frame.h"
+#include "pipeline/frame_pipeline.h"
 
 using Clock = std::chrono::steady_clock;
 
