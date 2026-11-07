@@ -35,4 +35,11 @@ if(BUILD_TESTING)
     target_link_libraries(frame_pipeline_lifecycle_test PRIVATE streambrew Threads::Threads)
     add_test(NAME frame_pipeline_lifecycle COMMAND frame_pipeline_lifecycle_test)
     set_tests_properties(frame_pipeline_lifecycle PROPERTIES TIMEOUT 30)
+
+    # The sample video is not distributed with the repository. See media/README.md.
+    add_executable(frame_rate_modes_test tests/frame_rate_modes_test.cpp)
+    target_link_libraries(frame_rate_modes_test PRIVATE streambrew)
+    add_test(NAME frame_rate_modes COMMAND frame_rate_modes_test
+        "${CMAKE_CURRENT_SOURCE_DIR}/media/sample3.mp4")
+    set_tests_properties(frame_rate_modes PROPERTIES TIMEOUT 60 SKIP_RETURN_CODE 77)
 endif()

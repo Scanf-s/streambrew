@@ -7,7 +7,7 @@ CLANG_TIDY ?= clang-tidy
 BUILD_DIR ?= build
 BUILD_TYPE ?= Debug
 JOBS ?= $(shell getconf _NPROCESSORS_ONLN)
-SOURCE ?= sample.mp4
+SOURCE ?= media/sample3.mp4
 
 .PHONY: help configure build run test format format-check lint check clean
 

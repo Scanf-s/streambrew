@@ -8,7 +8,7 @@
 using Clock = std::chrono::steady_clock;
 
 int main(int argc, char *argv[]) {
-    const char *source = argc > 1 ? argv[1] : "sample.mp4";
+    const char *source = argc > 1 ? argv[1] : "media/sample1.mp4";
 
     // Setup clock for measuring FPS
     auto window_start = Clock::now();

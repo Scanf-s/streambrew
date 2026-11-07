@@ -9,16 +9,17 @@ Install the GStreamer development package, `pkg-config`, CMake, and a C++ compil
 ```sh
 cmake -S . -B build
 cmake --build build
-./build/main sample.mp4
+./build/main media/sample3.mp4
 ```
 
+Download a video first and save it as `media/sample3.mp4`. The Tests section lists the video requirements.
 Pass another file path to play a different video. VS Code reads the include paths from CMake's `build/compile_commands.json`.
 
 ## Development commands
 
 ```sh
 make build                   # Configure and build
-make run SOURCE=sample.mp4   # Build and process a video
+make run SOURCE=video.mp4    # Build and process a video (default: media/sample3.mp4)
 make test                    # Build and run tests
 make format                  # Apply formatting to C++ sources and headers
 make format-check            # Check formatting without changing files
@@ -45,7 +46,7 @@ options.timing = streambrew::DeliveryTiming::AsFastAsPossible;
 options.overflow = streambrew::OverflowPolicy::BlockProducer;
 options.max_pending_frames = 4;
 
-streambrew::FramePipeline pipeline("sample.mp4", streambrew::PixelFormat::RGB, options);
+streambrew::FramePipeline pipeline("media/sample3.mp4", streambrew::PixelFormat::RGB, options);
 pipeline.run([](const streambrew::Frame &frame) {
     // Process frame.data here, using frame.stride to advance between rows.
 });
@@ -170,6 +171,11 @@ The integration test generates its own AVI fixtures, including one with audio.
 It requires the GStreamer Base and Good runtime plugins (`videotestsrc`, `audiotestsrc`, `avimux`, and `avidemux`).
 
 Lifecycle tests use an in-process `appsrc` to check silent/stalled inputs, stop requests, timeout stages, exception cleanup, and concurrent/repeated runs.
+
+The frame rate test plays `media/sample3.mp4` in each frame rate mode and compares the frames.
+Save any H.264 MP4 file with a frame rate between 12 and 60 fps under this name.
+The test also needs an H.264 decoder. On Ubuntu, install the `gstreamer1.0-libav` package.
+If the video or the decoder is missing, CTest reports the test as skipped.
 
 ```sh
 cmake -S . -B build
