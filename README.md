@@ -45,6 +45,8 @@ streambrew::PipelineOptions options;
 options.timing = streambrew::DeliveryTiming::AsFastAsPossible;
 options.overflow = streambrew::OverflowPolicy::BlockProducer;
 options.max_pending_frames = 4;
+options.frame_rate = streambrew::FrameRateMode::Limit;
+options.fps = 15;
 
 streambrew::FramePipeline pipeline("media/sample3.mp4", streambrew::PixelFormat::RGB, options);
 pipeline.run([](const streambrew::Frame &frame) {
@@ -58,9 +60,16 @@ pipeline.run([](const streambrew::Frame &frame) {
 | `Clocked` (default) | Wait for video timestamps on the pipeline clock |
 | `BlockProducer` (default) | Wait for queue space and preserve queued frames in order |
 | `DropOldest` | Discard the oldest pending frame when the queue is full. Only preserve newer frames |
+| `Source` (default) | Deliver every decoded frame once |
+| `Limit` | Drop frames that exceed `fps`. Never duplicate frames |
+| `Fixed` | Drop or duplicate frames so that each second of video has exactly `fps` frames |
 
 `max_pending_frames` defaults to **1** and must be in `[1, G_MAXUINT]`.
 It limits the appsink queue, excluding the frame in the callback and upstream buffers.
+
+`fps` defaults to **30** and must be positive. Only `Limit` and `Fixed` use it.
+The frame rate is counted on the video timeline, not in processing speed.
+For example, `Fixed` with `fps = 30` delivers 60 frames for a 2-second 24 fps video, even with `AsFastAsPossible`.
 
 ## Threading model
 
