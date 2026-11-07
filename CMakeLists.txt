@@ -8,6 +8,7 @@ pkg_check_modules(GSTREAMER REQUIRED IMPORTED_TARGET gstreamer-1.0 gstreamer-app
 
 add_library(streambrew
     src/pipeline/frame_pipeline.cpp
+    src/pipeline/frame_pipeline_run.cpp
     src/gstreamer/pipeline_builder.cpp
     src/gstreamer/frame_reader.cpp
     src/gstreamer/bus.cpp)
