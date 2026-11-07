@@ -7,7 +7,9 @@
 #include <future>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <thread>
+#include <vector>
 
 namespace streambrew {
 struct FramePipelineTestAccess {
@@ -41,7 +43,18 @@ struct SyntheticInput {
     InputMode mode;
     guint limit;
     guint generated = 0;
+    // Published by started, so read it only after started is true.
+    GstElement *source = nullptr;
     std::atomic<bool> started{false};
+
+    static GstBuffer *make_frame(guint index) {
+        constexpr gsize size = gsize{32} * 24 * 3;
+        GstBuffer *buffer = gst_buffer_new_allocate(nullptr, size, nullptr);
+        gst_buffer_memset(buffer, 0, static_cast<guint8>(index), size);
+        GST_BUFFER_PTS(buffer) = gst_util_uint64_scale(index, GST_SECOND, 30);
+        GST_BUFFER_DURATION(buffer) = GST_SECOND / 30;
+        return buffer;
+    }
 
     static void need_data(GstAppSrc *source, guint, gpointer data) {
         auto &input = *static_cast<SyntheticInput *>(data);
@@ -54,17 +67,12 @@ struct SyntheticInput {
             }
             return;
         }
-        constexpr gsize size = gsize{32} * 24 * 3;
-        GstBuffer *buffer = gst_buffer_new_allocate(nullptr, size, nullptr);
-        gst_buffer_memset(buffer, 0, static_cast<guint8>(input.generated), size);
-        GST_BUFFER_PTS(buffer) = gst_util_uint64_scale(input.generated, GST_SECOND, 30);
-        GST_BUFFER_DURATION(buffer) = GST_SECOND / 30;
-        ++input.generated;
-        gst_app_src_push_buffer(source, buffer);
+        gst_app_src_push_buffer(source, make_frame(input.generated++));
     }
 
     static void setup(GstElement *, GstElement *source, gpointer data) {
         auto &input = *static_cast<SyntheticInput *>(data);
+        input.source = source;
         GstCaps *caps =
             gst_caps_from_string("video/x-raw,format=RGB,width=32,height=24,framerate=30/1");
         gst_app_src_set_caps(GST_APP_SRC(source), caps);
@@ -177,6 +185,10 @@ void test_validation() {
     options.frame_wait_timeout = -1ms;
     expect_throw<std::invalid_argument>(
         [&] { fixture.pipeline.run([](const Frame &) {}, options); });
+    options = {};
+    options.timeout_action = static_cast<TimeoutAction>(42);
+    expect_throw<std::invalid_argument>(
+        [&] { fixture.pipeline.run([](const Frame &) {}, options); });
     require(fixture.pipeline.state() == RunState::Ready, "validation must not consume the run");
     fixture.pipeline.request_stop();
     require(fixture.pipeline.run([](const Frame &) {}) == RunResult::Stopped,
@@ -230,6 +242,93 @@ void test_timeouts() {
                 "slow callbacks must not consume the next-frame waiting budget");
         require_stopped(fixture.pipeline);
     }
+}
+
+bool contains(const std::string &text, const char *part) {
+    return text.find(part) != std::string::npos;
+}
+
+void test_timeout_warnings() {
+    {
+        Fixture fixture(InputMode::Silent);
+        RunOptions options;
+        options.first_frame_timeout = 60ms;
+        options.timeout_action = TimeoutAction::WarnAndContinue;
+        std::vector<std::string> warnings;
+        options.warning_handler = [&](const std::string &message) {
+            warnings.push_back(message);
+            fixture.pipeline.request_stop();
+        };
+        const auto result = fixture.pipeline.run([](const Frame &) {}, options);
+        require(result == RunResult::Stopped && warnings.size() == 1 &&
+                    contains(warnings[0], "first frame"),
+                "a first-frame timeout warning must keep the run alive until a stop request");
+        require_stopped(fixture.pipeline);
+    }
+    {
+        // The handler resumes the input after the first stall and ends it after the second.
+        Fixture fixture(InputMode::Stall, 3);
+        RunOptions options;
+        options.first_frame_timeout = 2s;
+        options.frame_wait_timeout = 60ms;
+        options.timeout_action = TimeoutAction::WarnAndContinue;
+        std::vector<std::string> warnings;
+        options.warning_handler = [&](const std::string &message) {
+            warnings.push_back(message);
+            auto *source = GST_APP_SRC(fixture.input.source);
+            if (warnings.size() == 1) {
+                gst_app_src_push_buffer(source, SyntheticInput::make_frame(3));
+                gst_app_src_push_buffer(source, SyntheticInput::make_frame(4));
+            } else {
+                gst_app_src_end_of_stream(source);
+            }
+        };
+        int frames = 0;
+        const auto result = fixture.pipeline.run([&](const Frame &) { ++frames; }, options);
+        require(result == RunResult::EndOfStream && frames == 5 && warnings.size() == 2 &&
+                    contains(warnings[0], "next frame") && contains(warnings[1], "next frame"),
+                "each stall must warn once, and a new frame must allow the next warning");
+        require_stopped(fixture.pipeline);
+    }
+    {
+        struct HandlerError : std::runtime_error {
+            using std::runtime_error::runtime_error;
+        };
+        Fixture fixture(InputMode::Silent);
+        RunOptions options;
+        options.first_frame_timeout = 60ms;
+        options.timeout_action = TimeoutAction::WarnAndContinue;
+        options.warning_handler = [](const std::string &) { throw HandlerError("handler"); };
+        expect_throw<HandlerError>([&] { fixture.pipeline.run([](const Frame &) {}, options); });
+        require_stopped(fixture.pipeline);
+    }
+}
+
+void test_bus_warning_reaches_handler() {
+    Fixture fixture;
+    RunOptions options;
+    std::vector<std::string> warnings;
+    options.warning_handler = [&](const std::string &message) { warnings.push_back(message); };
+    bool injected = false;
+    const auto result = fixture.pipeline.run(
+        [&](const Frame &) {
+            if (!injected) {
+                injected = true;
+                auto *native = FramePipelineTestAccess::native(fixture.pipeline);
+                gst::ErrorPtr warning(
+                    g_error_new_literal(GST_CORE_ERROR, GST_CORE_ERROR_FAILED, "injected warning"));
+                gst_element_post_message(
+                    native, gst_message_new_warning(GST_OBJECT(native), warning.get(), nullptr));
+            }
+        },
+        options);
+    int matches = 0;
+    for (const auto &warning : warnings) {
+        matches += contains(warning, "injected warning") ? 1 : 0;
+    }
+    require(result == RunResult::EndOfStream && matches == 1,
+            "a bus warning must reach the handler once without ending the run");
+    require_stopped(fixture.pipeline);
 }
 
 void test_stop_while_waiting() {
@@ -318,6 +417,8 @@ int main() {
         test_exception_cleanup();
         test_validation();
         test_timeouts();
+        test_timeout_warnings();
+        test_bus_warning_reaches_handler();
         test_stop_while_waiting();
         test_stop_during_callback_and_concurrent_run();
         test_bus_error_before_eos_result();
