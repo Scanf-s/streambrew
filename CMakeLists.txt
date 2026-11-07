@@ -21,10 +21,16 @@ target_link_libraries(main PRIVATE streambrew)
 
 include(CTest)
 if(BUILD_TESTING)
+    find_package(Threads REQUIRED)
     add_executable(frame_pipeline_options_test tests/frame_pipeline_options_test.cpp)
     target_link_libraries(frame_pipeline_options_test PRIVATE streambrew)
     add_test(NAME frame_pipeline_options COMMAND frame_pipeline_options_test
         "${CMAKE_CURRENT_BINARY_DIR}/pipeline-options-fixture.avi"
         "${CMAKE_CURRENT_BINARY_DIR}/pipeline-options-audio-fixture.avi")
     set_tests_properties(frame_pipeline_options PROPERTIES TIMEOUT 30)
+
+    add_executable(frame_pipeline_lifecycle_test tests/frame_pipeline_lifecycle_test.cpp)
+    target_link_libraries(frame_pipeline_lifecycle_test PRIVATE streambrew Threads::Threads)
+    add_test(NAME frame_pipeline_lifecycle COMMAND frame_pipeline_lifecycle_test)
+    set_tests_properties(frame_pipeline_lifecycle PROPERTIES TIMEOUT 30)
 endif()

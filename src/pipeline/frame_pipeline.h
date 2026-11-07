@@ -49,6 +49,9 @@ class FramePipeline {
 
     RunResult run_loop(const FrameCallback &on_frame, const RunOptions &options);
 
+    // Tests attach synthetic URI sources and verify the native state after teardown.
+    friend struct FramePipelineTestAccess;
+
     // The destructor body runs before these members release their references,
     // so the pipeline is already in the NULL state at that point.
     gst::ObjectPtr<GstElement> pipeline_;
