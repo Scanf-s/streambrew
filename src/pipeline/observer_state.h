@@ -14,8 +14,8 @@
 
 namespace streambrew::detail {
 
-// The observer decides stop, error, and timeout results. The worker decides
-// EndOfStream because only it knows whether queued samples remain.
+// The observer decides stop, error, and timeout results.
+// The worker decides EndOfStream because only it knows whether queued samples remain.
 // Every mutable field below is protected by mutex, except stop_requested.
 struct ObserverState {
     ObserverState(GstBus *native_bus, const RunOptions &run_options, const std::atomic<bool> &stop)

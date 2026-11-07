@@ -61,59 +61,115 @@ pipeline.run([](const streambrew::Frame &frame) {
 `max_pending_frames` defaults to **1** and must be in `[1, G_MAXUINT]`.
 It limits the appsink queue, excluding the frame in the callback and upstream buffers.
 
-## Run control
+## Threading model
 
-```cpp
-using namespace std::chrono_literals;
+A run uses four threads.
 
-streambrew::FramePipeline pipeline("sample.mp4", streambrew::PixelFormat::RGB);
-streambrew::RunOptions options;
-options.first_frame_timeout = 5s;
-options.frame_wait_timeout = 2s;
+| Thread | Role |
+| --- | --- |
+| main | Creates the `FramePipeline` and calls `run()` on a worker thread (`src/main.cpp`). |
+| worker | The thread that calls `run()`. It pulls samples from the appsink, calls the frame callback, and decides `EndOfStream`. |
+| observer | Started by `run()`. It reads bus messages and handles stop requests, errors, and timeouts. |
+| GStreamer | Created by GStreamer. It decodes the video and calls the appsink callbacks (`new_sample` and `eos`). |
 
-int processed = 0;
-const auto result = pipeline.run([&](const streambrew::Frame &frame) {
-    // Process frame here. Its data is valid only during this callback.
-    if (++processed == 100) {
-        pipeline.request_stop();
-    }
-}, options);
+The threads share their state through `ObserverState`, and a mutex protects that state.
+`ObserverState` is not a thread. It only records what happened, for example that a new frame arrived or that the run must stop.
+The worker waits on a condition variable.
+The observer waits on the GStreamer bus.
+To wake the observer, another thread posts an empty application message to the bus with `wake_bus()`.
+Because of this, the observer does not check its state at a fixed interval.
+
+Frame data does not go through `ObserverState` or the observer.
+The appsink keeps each decoded sample in its own queue, and the worker pulls the sample from that queue.
+
+In the diagrams below, a solid arrow means that one thread calls or starts another.
+A dashed arrow means that one thread wakes another.
+A note shows work that a thread does by itself.
+
+### Normal run
+
+```mermaid
+sequenceDiagram
+    participant M as main thread
+    participant W as worker thread
+    participant O as observer thread
+    participant G as GStreamer thread
+
+    Note over M,G: Start
+    M->>W: std::thread calls pipeline.run(on_frame)
+    Note over W: create ObserverState and<br/>register the appsink callbacks
+    W->>G: set_state(PLAYING) starts streaming
+    W->>O: observer.start() starts the observer
+
+    Note over M,G: Deliver one frame
+    Note over W: no sample yet, so set<br/>awaiting_frame and wait
+    W-->>O: wake_bus() so the observer starts the timeout
+    Note over G: appsink queues the sample, then calls<br/>frame_available() on this same thread
+    G-->>W: notify_all() after frame_revision++
+    G-->>O: wake_bus()
+    Note over O: a frame is available,<br/>so the timeout stops
+    W->>G: try_pull_sample(0) takes the sample from the appsink queue
+    Note over W: on_frame(frame) runs<br/>on the worker thread
+    W-->>O: frame_processed() resets the timeout and calls wake_bus()
+
+    Note over M,G: End of stream
+    Note over G: after the worker pulls every queued sample,<br/>appsink calls input_eos() on this thread
+    G-->>O: wake_bus() after input_eos = true
+    Note over O: copy input_eos to eos_received
+    O-->>W: notify_all()
+    Note over W: no samples left and eos_received,<br/>so record EndOfStream
+    W->>O: finish() requests exit and joins the observer
+    W->>G: set_state(NULL) stops streaming
+    W-->>M: run() returns, and main joins the worker
 ```
 
-Each instance runs once. `state()` reports `Ready`, `Running`, or `Finished`.
-`run()` returns `EndOfStream` after draining frames or `Stopped` after a stop
-request. Concurrent, recursive, and repeated runs throw `std::logic_error`.
+The appsink calls the `eos` callback only after the worker has pulled every queued sample.
+So the worker does not lose the last frames when it reports `EndOfStream`.
 
-`request_stop()` and `state()` can be called from another thread. Stop requests
-are also allowed before `run()` and inside callbacks. The current callback
-finishes, pending frames are discarded, and the pipeline reaches `NULL` before
-`run()` returns. Exceptions also trigger teardown before propagating.
+### Early exit
 
-Timeouts are disabled by default; configured values must be positive.
-`first_frame_timeout` starts before playback begins. `frame_wait_timeout` starts
-after each callback and frame cleanup, excluding consumer processing time.
-`PipelineTimeout::stage()` distinguishes `FirstFrame` from `NextFrame`.
-Invalid options or an empty callback do not consume the instance's run.
+A run can end early in three ways.
+In each case, the observer stores the result in `ObserverState`, and the worker reads it in `next_frame()`.
 
-Cancellation and timeouts cannot interrupt callbacks or blocking plugin calls.
-The loop polls at most every 100 ms while waiting; teardown may take additional
-time. Wait for `run()` to finish and join its thread before destroying the object.
+```mermaid
+sequenceDiagram
+    participant C as any thread
+    participant W as worker thread
+    participant O as observer thread
+    participant G as GStreamer thread
 
-## Code layout
+    Note over W: no sample yet, so set<br/>awaiting_frame and wait
+    W-->>O: wake_bus()
+    alt Frame wait timeout
+        Note over O: wait on the bus until the deadline.<br/>When it passes, store PipelineTimeout in failure
+        O-->>W: notify_all()
+        Note over W: next_frame() rethrows the exception
+    else Stop request
+        Note over C: request_stop() sets stop_requested
+        C-->>O: wake_bus()
+        Note over O: read the remaining bus messages,<br/>then store Stopped in result
+        O-->>W: notify_all()
+        Note over W: next_frame() returns an empty sample
+    else Bus error
+        G-->>O: post an ERROR message on the bus
+        Note over O: read_bus() throws std::runtime_error,<br/>so store the exception in failure
+        O-->>W: notify_all()
+        Note over W: next_frame() rethrows the exception
+    end
+    W->>O: finish() or ~PipelineObserver() joins the observer
+    W->>G: set_state(NULL) before run() returns or throws
+```
 
-- `pipeline/frame_pipeline.cpp`: construction, execution state, and teardown.
-- `pipeline/frame_pipeline_run.cpp`: frame waiting, stop checks, and timeout decisions.
-- `gstreamer/`: pipeline construction, bus events, frame mapping, and native resource ownership.
-- `utils/`: generic scope-exit cleanup and elapsed-time budgets, independent of GStreamer.
+- If `timeout_action` is `TimeoutAction::WarnAndContinue`, the observer calls `warning_handler` once instead of storing an exception. The run continues.
+- A stop request does not interrupt a callback that is running. The worker sees the request after the callback returns.
+- If an ERROR message is still on the bus when a stop is requested, `run()` throws that error instead of returning `Stopped`.
 
 ## Tests
 
 The integration test generates its own AVI fixtures, including one with audio.
-It requires the GStreamer Base and Good runtime plugins (`videotestsrc`,
-`audiotestsrc`, `avimux`, and `avidemux`).
+It requires the GStreamer Base and Good runtime plugins (`videotestsrc`, `audiotestsrc`, `avimux`, and `avidemux`).
 
-Lifecycle tests use an in-process `appsrc` to check silent/stalled inputs, stop
-requests, timeout stages, exception cleanup, and concurrent/repeated runs.
+Lifecycle tests use an in-process `appsrc` to check silent/stalled inputs, stop requests, timeout stages, exception cleanup, and concurrent/repeated runs.
 
 ```sh
 cmake -S . -B build

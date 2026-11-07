@@ -41,8 +41,8 @@ void read_bus(ObserverState &state, GstClockTime timeout) {
     }
 }
 
-// Called with state.mutex held. No periodic polling interval is needed:
-// control/frame messages wake the bus; otherwise wait until the deadline.
+// Called with state.mutex held. No periodic polling interval is needed.
+// The control/frame messages wake the bus and otherwise wait until the deadline.
 GstClockTime observation_wait(ObserverState &state, std::string &warning) {
     if (!state.awaiting_frame || state.eos_received || state.warning_issued) {
         return GST_CLOCK_TIME_NONE;
@@ -136,8 +136,8 @@ void PipelineObserver::observe(const std::shared_ptr<detail::ObserverState> &sta
             state->changed.notify_all();
 
             if (finish || stop) {
-                // Acknowledge shutdown only after a final drain. This preserves
-                // errors queued by the last callback even if EOS arrived first.
+                // Acknowledge shutdown only after a final drain. 
+                // This preserves errors queued by the last callback even if EOS arrived first.
                 read_bus(*state, 0);
                 if (stop) {
                     std::lock_guard<std::mutex> lock(state->mutex);
