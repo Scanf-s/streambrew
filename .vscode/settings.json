@@ -2,9 +2,11 @@
     "C_Cpp.errorSquiggles": "enabled",
     "cmake.buildDirectory": "${workspaceFolder}/build",
     "cmake.configureOnOpen": true,
+    "cmake.configureOnEdit": true,
     "cmake.automaticReconfigure": true,
     "cmake.configureSettings": {
         "CMAKE_CXX_COMPILER": "/usr/bin/g++",
-        "BUILD_TESTING": false
+        "BUILD_TESTING": true,
+        "CMAKE_EXPORT_COMPILE_COMMANDS": true
     }
 }

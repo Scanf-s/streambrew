@@ -3,12 +3,20 @@
         {
             "name": "Linux",
             "includePath": [
-                "${workspaceFolder}/src"
+                "${workspaceFolder}/src",
+                "/usr/include/gstreamer-1.0",
+                "/usr/include/glib-2.0",
+                "/usr/lib/x86_64-linux-gnu/glib-2.0/include",
+                "/usr/include/orc-0.4"
             ],
             "configurationProvider": "ms-vscode.cmake-tools",
+            "mergeConfigurations": true,
             "compileCommands": "${workspaceFolder}/build/compile_commands.json",
             "defines": [],
             "compilerPath": "/usr/bin/g++",
+            "compilerArgs": [
+                "-pthread"
+            ],
             "cStandard": "gnu17",
             "cppStandard": "gnu++17",
             "intelliSenseMode": "linux-gcc-x64"
