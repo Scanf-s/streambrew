@@ -7,8 +7,6 @@
 
 namespace streambrew::gst {
 
-bool sink_started(GstElement *sink);
-
 // Maps the sample only for the duration of the callback, including exception unwinding.
 void deliver_frame(GstSample *sample, PixelFormat format,
                    const std::function<void(const Frame &)> &on_frame);

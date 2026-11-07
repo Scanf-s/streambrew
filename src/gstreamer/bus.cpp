@@ -1,38 +1,38 @@
 #include "gstreamer/bus.h"
-#include "gstreamer/gst_ptr.h"
-
-#include <stdexcept>
-#include <string>
 
 namespace streambrew::gst {
 
-BusStatus poll_bus(GstBus *bus, GstClockTime timeout) {
-    BusStatus status = BusStatus::Running;
-    while (true) {
-        MessagePtr msg(gst_bus_timed_pop_filtered(
-            bus, timeout, static_cast<GstMessageType>(GST_MESSAGE_ERROR | GST_MESSAGE_EOS)));
-        if (msg == nullptr) {
-            return status;
-        }
-        timeout = 0;
-        if (GST_MESSAGE_TYPE(msg.get()) == GST_MESSAGE_EOS) {
-            status = BusStatus::Eos;
-            continue;
-        }
+MessagePtr wait_for_bus_message(GstBus *bus, GstClockTime timeout) {
+    const auto types = static_cast<GstMessageType>(GST_MESSAGE_ERROR | GST_MESSAGE_WARNING |
+                                                   GST_MESSAGE_EOS | GST_MESSAGE_APPLICATION);
+    return MessagePtr(gst_bus_timed_pop_filtered(bus, timeout, types));
+}
 
-        GError *raw_error = nullptr;
-        gchar *raw_debug = nullptr;
-        gst_message_parse_error(msg.get(), &raw_error, &raw_debug);
-        ErrorPtr error(raw_error);
-        CharPtr debug_info(raw_debug);
-        std::string message =
-            std::string("Error from ") + GST_OBJECT_NAME(msg->src) + ": " + error->message;
-        if (debug_info != nullptr) {
-            message += "\nDebug details: ";
-            message += debug_info.get();
-        }
-        throw std::runtime_error(message);
+void wake_bus(GstBus *bus) noexcept {
+    gst_bus_post(bus, gst_message_new_application(
+                          nullptr, gst_structure_new_empty("streambrew-observer-wakeup")));
+}
+
+std::string describe_bus_message(GstMessage *message) {
+    GError *raw_error = nullptr;
+    gchar *raw_debug = nullptr;
+    const bool warning = GST_MESSAGE_TYPE(message) == GST_MESSAGE_WARNING;
+    if (warning) {
+        gst_message_parse_warning(message, &raw_error, &raw_debug);
+    } else {
+        gst_message_parse_error(message, &raw_error, &raw_debug);
     }
+    ErrorPtr error(raw_error);
+    CharPtr debug(raw_debug);
+    const char *source =
+        GST_MESSAGE_SRC(message) ? GST_OBJECT_NAME(GST_MESSAGE_SRC(message)) : "unknown";
+    std::string text =
+        std::string(warning ? "Warning from " : "Error from ") + source + ": " + error->message;
+    if (debug) {
+        text += "\nDebug details: ";
+        text += debug.get();
+    }
+    return text;
 }
 
 } // namespace streambrew::gst

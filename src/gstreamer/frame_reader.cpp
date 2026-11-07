@@ -6,12 +6,6 @@
 
 namespace streambrew::gst {
 
-bool sink_started(GstElement *sink) {
-    GstState state = GST_STATE_NULL;
-    gst_element_get_state(sink, &state, nullptr, 0);
-    return state == GST_STATE_PAUSED || state == GST_STATE_PLAYING;
-}
-
 void deliver_frame(GstSample *sample, PixelFormat format,
                    const std::function<void(const Frame &)> &on_frame) {
     GstVideoInfo video_info;

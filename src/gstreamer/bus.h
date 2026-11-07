@@ -1,13 +1,14 @@
 #pragma once
 
-#include <gst/gst.h>
+#include <string>
+
+#include "gstreamer/gst_ptr.h"
 
 namespace streambrew::gst {
 
-enum class BusStatus { Running, Eos };
-
-// Waits for an error/EOS, then drains matching messages already queued.
-// Errors throw even if an EOS message was encountered first.
-BusStatus poll_bus(GstBus *bus, GstClockTime timeout = 0);
+// APPLICATION messages wake an observer after a control or frame notification.
+MessagePtr wait_for_bus_message(GstBus *bus, GstClockTime timeout);
+void wake_bus(GstBus *bus) noexcept;
+std::string describe_bus_message(GstMessage *message);
 
 } // namespace streambrew::gst

@@ -4,24 +4,26 @@ project(streambrew LANGUAGES CXX)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(PkgConfig REQUIRED)
+find_package(Threads REQUIRED)
 pkg_check_modules(GSTREAMER REQUIRED IMPORTED_TARGET gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0)
 
 add_library(streambrew
     src/pipeline/frame_pipeline.cpp
     src/pipeline/frame_pipeline_run.cpp
+    src/pipeline/pipeline_observer.cpp
+    src/pipeline/frame_waiter.cpp
     src/gstreamer/pipeline_builder.cpp
     src/gstreamer/frame_reader.cpp
     src/gstreamer/bus.cpp)
 target_include_directories(streambrew PUBLIC src)
 target_compile_features(streambrew PUBLIC cxx_std_17)
-target_link_libraries(streambrew PUBLIC PkgConfig::GSTREAMER)
+target_link_libraries(streambrew PUBLIC PkgConfig::GSTREAMER PRIVATE Threads::Threads)
 
 add_executable(main src/main.cpp)
 target_link_libraries(main PRIVATE streambrew)
 
 include(CTest)
 if(BUILD_TESTING)
-    find_package(Threads REQUIRED)
     add_executable(frame_pipeline_options_test tests/frame_pipeline_options_test.cpp)
     target_link_libraries(frame_pipeline_options_test PRIVATE streambrew)
     add_test(NAME frame_pipeline_options COMMAND frame_pipeline_options_test
