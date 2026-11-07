@@ -1,9 +1,9 @@
+#include "frame/frame.h"
+#include "pipeline/frame_pipeline.h"
 #include <chrono>
 #include <exception>
 #include <iostream>
-
-#include "frame/frame.h"
-#include "pipeline/frame_pipeline.h"
+#include <thread>
 
 using Clock = std::chrono::steady_clock;
 
@@ -31,8 +31,22 @@ int main(int argc, char *argv[]) {
 
     // Request video pipeline
     try {
+        std::exception_ptr worker_error;
         streambrew::FramePipeline pipeline(source, streambrew::PixelFormat::RGB);
-        pipeline.run(on_frame);
+
+        // register worker thread to run the pipeline
+        std::thread worker([&] {
+            try {
+                pipeline.run(on_frame);
+            } catch (...) {
+                worker_error = std::current_exception();
+            }
+        });
+
+        worker.join();
+        if (worker_error) {
+            std::rethrow_exception(worker_error);
+        }
     } catch (const std::exception &e) {
         std::cerr << e.what() << '\n';
         return 1;
