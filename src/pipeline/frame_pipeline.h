@@ -19,11 +19,14 @@ class FramePipeline {
   public:
     using FrameCallback = std::function<void(const Frame &frame)>;
 
-    // Uses the default PipelineOptions. Throws std::invalid_argument for invalid
-    // options, format, or fps, and std::runtime_error if construction fails.
+    // Uses the default PipelineOptions.
+    // Throws std::invalid_argument for invalid options, format, or fps,
+    // and std::runtime_error if construction fails.
     explicit FramePipeline(const std::string &source, PixelFormat format, int fps = 30);
+
     FramePipeline(const std::string &source, PixelFormat format, const PipelineOptions &options,
                   int fps = 30);
+
     // Let run() finish (and join its thread) before destruction.
     ~FramePipeline();
 
@@ -31,15 +34,20 @@ class FramePipeline {
     FramePipeline(const FramePipeline &) = delete;
     FramePipeline &operator=(const FramePipeline &) = delete;
 
-    // Runs once. Concurrent, recursive, and subsequent calls throw std::logic_error.
+    // Runs once.
+    // Concurrent, recursive, and subsequent calls throw std::logic_error.
     // Invalid callbacks/options throw std::invalid_argument without consuming the run.
     // Frame data is valid only during the callback, on the calling thread.
     // All exits stop the pipeline before returning or propagating an exception.
     RunResult run(const FrameCallback &on_frame, const RunOptions &options = {});
 
-    // Thread-safe and non-blocking; also allowed inside a callback or before run().
-    // A request before run() cancels that run. The active callback is not interrupted.
+    // Thread-safe and non-blocking.
+    // And also allowed inside a callback or before run().
+    // A request before run() cancels that run.
+    // The active callback is not interrupted.
     void request_stop() noexcept;
+
+    // Returns current Run status
     RunState state() const noexcept;
 
   private:
