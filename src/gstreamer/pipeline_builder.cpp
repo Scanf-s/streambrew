@@ -35,6 +35,35 @@ void validate_options(const PipelineOptions &options) {
     if (options.max_pending_frames == 0 || options.max_pending_frames > G_MAXUINT) {
         throw std::invalid_argument("max_pending_frames must be in [1, G_MAXUINT]");
     }
+
+    if (options.frame_rate != FrameRateMode::Source && options.frame_rate != FrameRateMode::Limit &&
+        options.frame_rate != FrameRateMode::Fixed) {
+        throw std::invalid_argument("invalid frame rate mode");
+    }
+
+    if (options.fps <= 0) {
+        throw std::invalid_argument("fps must be greater than 0");
+    }
+}
+
+std::string sink_description(PixelFormat format, const PipelineOptions &options) {
+    const std::string fps = std::to_string(options.fps);
+    std::string rate;
+    std::string caps = std::string("video/x-raw,format=") + to_gst_format(format);
+    switch (options.frame_rate) {
+    case FrameRateMode::Source:
+        break;
+    case FrameRateMode::Limit:
+        // With max-rate, videorate only drops frames.
+        rate = "videorate max-rate=" + fps + " ! ";
+        break;
+    case FrameRateMode::Fixed:
+        // videorate drops or duplicates frames to match the framerate in the caps.
+        rate = "videorate ! ";
+        caps += ",framerate=" + fps + "/1";
+        break;
+    }
+    return rate + "videoconvert ! " + caps + " ! appsink name=frames";
 }
 
 std::string to_uri(const std::string &source) {
@@ -53,14 +82,11 @@ std::string to_uri(const std::string &source) {
 } // namespace
 
 PipelineElements build_frame_pipeline(const std::string &source, PixelFormat format,
-                                      const PipelineOptions &options, int fps) {
+                                      const PipelineOptions &options) {
     PipelineElements elements;
     elements.pipeline.reset(create_playbin());
     if (elements.pipeline == nullptr) {
         throw std::runtime_error("Could not create the GStreamer playbin element.");
-    }
-    if (fps <= 0) {
-        throw std::invalid_argument("fps must be greater than 0");
     }
 
     validate_options(options);
@@ -77,14 +103,7 @@ PipelineElements build_frame_pipeline(const std::string &source, PixelFormat for
         g_object_set(elements.pipeline.get(), "flags", flags & ~play_flag_audio, nullptr);
     }
 
-    // Normalize decoded video to a fixed frame rate.
-    const std::string description = "videorate ! "
-                                    "videoconvert ! "
-                                    "video/x-raw,format=" +
-                                    std::string(to_gst_format(format)) +
-                                    ",framerate=" + std::to_string(fps) +
-                                    "/1 ! "
-                                    "appsink name=frames";
+    const std::string description = sink_description(format, options);
 
     // create new sink_bin to attach whole description pipeline elements
     // into the video-sink property of playbin

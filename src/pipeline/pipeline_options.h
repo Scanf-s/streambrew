@@ -25,6 +25,20 @@ enum class OverflowPolicy {
 
 };
 
+// The frame rate is measured on the video timeline, not in processing speed.
+enum class FrameRateMode {
+
+    // Deliver every decoded frame once.
+    Source,
+
+    // Drop frames that exceed fps, and never duplicate frames.
+    Limit,
+
+    // Drop or duplicate frames so that each second of video has exactly fps frames.
+    Fixed
+
+};
+
 struct PipelineOptions {
 
     DeliveryTiming timing = DeliveryTiming::Clocked;
@@ -33,6 +47,11 @@ struct PipelineOptions {
     // Appsink queue capacity
     // Must be in [1, G_MAXUINT].
     std::size_t max_pending_frames = 1;
+
+    FrameRateMode frame_rate = FrameRateMode::Source;
+
+    // Must be positive. Only Limit and Fixed use it.
+    int fps = 30;
 };
 
 } // namespace streambrew

@@ -20,13 +20,13 @@ void validate_run_options(const RunOptions &options) {
 }
 } // namespace
 
-FramePipeline::FramePipeline(const std::string &source, PixelFormat format, int fps)
-    : FramePipeline(source, format, PipelineOptions{}, fps) {}
+FramePipeline::FramePipeline(const std::string &source, PixelFormat format)
+    : FramePipeline(source, format, PipelineOptions{}) {}
 
 FramePipeline::FramePipeline(const std::string &source, PixelFormat format,
-                             const PipelineOptions &options, int fps)
+                             const PipelineOptions &options)
     : pixel_format_(format) {
-    auto elements = gst::build_frame_pipeline(source, format, options, fps);
+    auto elements = gst::build_frame_pipeline(source, format, options);
     pipeline_ = std::move(elements.pipeline);
     appsink_ = std::move(elements.appsink);
     bus_ = std::move(elements.bus);

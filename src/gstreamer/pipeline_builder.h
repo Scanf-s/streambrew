@@ -15,6 +15,6 @@ struct PipelineElements {
 };
 
 PipelineElements build_frame_pipeline(const std::string &source, PixelFormat format,
-                                      const PipelineOptions &options, int fps);
+                                      const PipelineOptions &options);
 
 } // namespace streambrew::gst

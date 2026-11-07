@@ -101,8 +101,11 @@ void test_invalid_options(const char *path) {
     options.overflow = static_cast<OverflowPolicy>(-1);
     expect_invalid([&] { FramePipeline pipeline(path, PixelFormat::RGB, options); });
     options = {};
-    expect_invalid([&] { FramePipeline pipeline(path, PixelFormat::RGB, options, 0); });
-    expect_invalid([&] { FramePipeline pipeline(path, PixelFormat::RGB, 0); });
+    options.fps = 0;
+    expect_invalid([&] { FramePipeline pipeline(path, PixelFormat::RGB, options); });
+    options = {};
+    options.frame_rate = static_cast<FrameRateMode>(-1);
+    expect_invalid([&] { FramePipeline pipeline(path, PixelFormat::RGB, options); });
 }
 } // namespace
 

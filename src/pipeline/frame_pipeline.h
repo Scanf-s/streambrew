@@ -13,19 +13,18 @@
 
 namespace streambrew {
 
-// Decodes a file or URI, normalizes video to a fixed frame rate, and delivers
-// frames according to independently configured timing and overflow policies.
+// Decodes a file or URI and delivers frames according to independently configured
+// frame rate, timing, and overflow policies.
 class FramePipeline {
   public:
     using FrameCallback = std::function<void(const Frame &frame)>;
 
     // Uses the default PipelineOptions.
-    // Throws std::invalid_argument for invalid options, format, or fps,
+    // Throws std::invalid_argument for invalid options or format,
     // and std::runtime_error if construction fails.
-    explicit FramePipeline(const std::string &source, PixelFormat format, int fps = 30);
+    explicit FramePipeline(const std::string &source, PixelFormat format);
 
-    FramePipeline(const std::string &source, PixelFormat format, const PipelineOptions &options,
-                  int fps = 30);
+    FramePipeline(const std::string &source, PixelFormat format, const PipelineOptions &options);
 
     // Let run() finish (and join its thread) before destruction.
     ~FramePipeline();
