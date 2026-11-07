@@ -34,10 +34,6 @@ class FramePipeline {
   private:
     PixelFormat pixel_format_;
 
-    enum class BusStatus { Running, Eos };
-
-    BusStatus poll_bus();
-
     // The destructor body runs before these members release their references,
     // so the pipeline is already in the NULL state at that point.
     gst::ObjectPtr<GstElement> pipeline_;

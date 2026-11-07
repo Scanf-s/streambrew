@@ -6,7 +6,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GSTREAMER REQUIRED IMPORTED_TARGET gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0)
 
-add_library(streambrew src/pipeline/frame_pipeline.cpp)
+add_library(streambrew
+    src/pipeline/frame_pipeline.cpp
+    src/gstreamer/pipeline_builder.cpp
+    src/gstreamer/frame_reader.cpp
+    src/gstreamer/bus.cpp)
 target_include_directories(streambrew PUBLIC src)
 target_compile_features(streambrew PUBLIC cxx_std_17)
 target_link_libraries(streambrew PUBLIC PkgConfig::GSTREAMER)
